@@ -1,6 +1,23 @@
 # GOPS
 
-GOPS는 실시간 시장 데이터, 차트, 주문 제어 기능을 제공하는 플랫폼이다.
+미국 주식 시장 데이터 조회, 차트, 모의 주문 및 AI 분석 기능을 구현한 크래프톤 정글 팀 프로젝트입니다.
+이 저장소는 팀의 공개 허용을 받아 정범진([iamnuked](https://github.com/iamnuked))의
+취업 포트폴리오용으로 정리한 독립 복사본입니다.
+
+> **현재 서비스 중단 · 실행 안내**
+> 외부 API 이용 기한과 웹사이트 운영 기한이 만료되어, 기존 배포 사이트 및 외부 연동 기능을
+> 현재 정상 실행할 수 없습니다. 이 저장소는 구현 내용과 설계·커밋 이력을 검토하기 위한 자료입니다.
+> 아래 기술·아키텍처·API 설명은 저장된 코드와 과거 구현을 설명하며, 현재 운영 중임을 의미하지 않습니다.
+
+## 프로젝트 출처와 기여
+
+- 원본: [KFJG-Team1/gops](https://github.com/KFJG-Team1/gops) — 팀 비공개 저장소이므로 접근 권한이 필요합니다.
+- 복사 기준: 원본 `main` 커밋 `9e12e98eb38d48ac6ba87fef539190d29c989c2b`.
+- 해당 커밋에서 이어지는 1,102개 커밋과 작성자·공동 작업 이력을 보존했습니다.
+  별도 개발 브랜치와 태그, GitHub 이슈·PR·리뷰·저장소 비밀값은 복사하지 않았습니다.
+- 정범진의 담당 경험: AWS EKS 기반 인프라 구축·운영, 빌드·배포 환경 구성,
+  캐시 중복 계산 및 실시간 데이터 전달 구조 개선.
+- 전체 코드는 팀 공동 결과물입니다. 이 개인 저장소의 소유자가 프로젝트 전체를 단독 구현했다는 의미는 아닙니다.
 
 현재 에이전트의 방향과 책임 경계는 `docs/AGENT_ARCHITECTURE.md`에서 확인할 수 있다.
 미래 제품 아이디어는 방향을 설명하는 참고 사항이며, 이미 구현된 기능을 보장하지 않는다.
@@ -17,6 +34,58 @@ GOPS는 실시간 시장 데이터, 차트, 주문 제어 기능을 제공하는
 - KIS 모의투자 주문 API, PostgreSQL 영속화, Outbox, 브로커 어댑터, 마이그레이션, 정합성 확인
 - 역할별 에이전트 골격, 시장 이벤트 감지, 알림 발행을 포함한 에이전트 오케스트레이션 v1
 - 로컬 Docker Compose와 AWS/EKS 배포 구성
+
+## 기술 스택
+
+| 영역 | 기술 | 프로젝트에서의 역할 |
+| --- | --- | --- |
+| 프론트엔드 | React 19, TypeScript, Vite | 시장 데이터·주문·AI 분석 화면 구현과 프론트엔드 빌드 |
+| 차트 | 자체 TypeScript 차트 엔진, Canvas 2D, D3 | 캔들·지표·작도 상태 관리, 좌표 계산과 차트 렌더링 |
+| 백엔드 | Python 3.12, FastAPI, Uvicorn | 차트·주문·분석 REST API와 실시간 연결 처리 |
+| 실시간 통신 | WebSocket, Server-Sent Events(SSE), Redis Pub/Sub | 시세·주문·알림 전달과 분석 리포트 진행 상황 스트리밍 |
+| 이벤트 스트림 | Apache Kafka | 시장 데이터와 주문·분석 이벤트를 수집기 및 작업자 사이에서 비동기로 전달 |
+| 데이터 저장 | PostgreSQL 16, ClickHouse 24.12, Redis 7, Amazon S3 | 주문 상태 영속화, 과거 시계열 조회, 최신 데이터·세션·캐시, 재생·재구성용 데이터 보관 |
+| AI 분석 | LangGraph, OpenAI API, Ontotext GraphDB | 역할별 분석 흐름 조율, 자연어 응답 생성, 기업·시장 관계 데이터 조회 |
+| 외부 연동 | Alpaca API, KIS 모의투자 API, Google OAuth 2.0, Logo.dev | 시장 데이터 수집, 모의 주문, 로그인, 기업 로고 표시 |
+| 컨테이너·배포 | Docker, Docker Compose, Kubernetes, Kustomize | 로컬 서비스 실행, 컨테이너 배포와 환경별 설정 조합 |
+| AWS 인프라 | EKS Auto Mode, ECR, S3, ALB, ACM, IAM/IRSA, Secrets Manager | 컨테이너 실행·이미지 저장·HTTPS 진입점·워크로드 권한·비밀값 관리 |
+| 인프라 코드 | Terraform | ECR·S3·Secrets Manager·IRSA 기반 리소스 구성 |
+| 검증·배포 자동화 | pytest, 프론트엔드 테스트 스크립트, Playwright, GitHub Actions | Python·차트 테스트, 브라우저 테스트, 빌드 검증과 수동 실행형 EKS 배포 워크플로 |
+
+버전은 저장소의 의존성 선언 및 컨테이너 이미지 기준이다. 로컬 S3 호환 저장소로는
+MinIO를 사용한다. 원본의 GitHub Actions 배포는 `workflow_dispatch` 수동 실행 방식이며,
+[로컬 EKS 배포 스크립트](docs/LOCAL_EKS_DEPLOY.md)도 보존했다.
+이 포트폴리오 저장소에서는 GitHub Actions를 비활성화하고 운영 자격 증명을 제공하지 않는다.
+
+## AWS 아키텍처
+
+![GOPS AWS 아키텍처: VPC의 public·private subnet, EKS 애플리케이션과 데이터 계층, 외부 API 연동](docs/assets/gops_arch.png)
+
+AWS 네트워크와 애플리케이션·데이터 계층의 관계를 보여주는 구성도다.
+React 프론트엔드, FastAPI 백엔드, 시장 데이터 수집·처리 작업자, AI 에이전트와
+주문 작업자를 EKS 워크로드로 분리한다.
+
+- **사용자 요청:** ALB가 HTTPS 요청을 프론트엔드와 백엔드 Service로 라우팅한다.
+  `/api`와 `/ws` 경로는 백엔드로 전달하며, ACM 인증서로 HTTPS를 구성한다.
+- **시장 데이터:** Alpaca 수집기가 Kafka로 이벤트를 전달하고, 처리 작업자가
+  Redis의 최신 데이터를 갱신한다. 저장 작업자는 ClickHouse 조회 데이터와 S3 보관
+  데이터를 기록한다. 차트 API는 Redis·ClickHouse에서 조회하고 WebSocket으로 갱신을 전달한다.
+- **모의 주문:** API가 PostgreSQL에 주문과 Outbox 이벤트를 저장하고,
+  발행 작업자가 Kafka로 전달한다. KIS 어댑터가 모의투자 API와 연동하며,
+  별도 정합성 확인 작업이 주문 상태를 점검한다.
+- **AI 분석:** 백엔드가 에이전트 오케스트레이터에 분석을 요청하고, 역할별 분석 흐름에서
+  시장·기업 데이터와 GraphDB 관계 정보를 사용한다. 설정된 경로에서 OpenAI API로
+  응답을 생성하며, 분석 리포트는 폴링·SSE로 전달한다.
+- **권한·배포:** ECR에 서비스별 이미지를 보관하고 Secrets Manager로 비밀값을 관리한다.
+  저장소에는 IRSA 서비스 계정과 AWS 권한 구성이 포함되어 있다.
+
+그림의 양쪽 가용 영역 배치는 모든 서비스의 이중화 완료를 의미하지 않는다.
+현재 저장소의 Kafka·Redis·PostgreSQL·ClickHouse·GraphDB StatefulSet은 각각
+`replicas: 1`이며, 그림에 표시된 EKS Pod Identity의 실제 적용 여부는 별도 확인이 필요하다.
+또한 이 저장소의 Terraform은 EKS 클러스터·VPC·서브넷·NAT를 생성하지 않고 기존 인프라를
+전제로 한다. 세부 범위는 [Terraform 안내](infra/aws/terraform/README.md),
+워크로드 구성은 [플랫폼 매니페스트](infra/k8s/base/platform)와
+[GraphDB 매니페스트](infra/k8s/base/app/statefulset-graphdb.yaml)를 참고한다.
 
 ## 먼저 읽을 문서
 
@@ -84,223 +153,21 @@ flowchart LR
   Reconciler --> KIS
 ```
 
-## 로컬 실행
+## 현재 실행 가능 범위
 
-### `backup` 브랜치 사용법과 데이터 경계
-
-이 `backup` 브랜치에는 전체 애플리케이션 소스 코드와 복구 스크립트가 들어 있습니다.
-다만 이동식 데이터 백업, `.env`, AWS 자격 증명, API 키, 토큰 캐시와 같은 비밀값은
-의도적으로 포함하지 않습니다. 비공개 이동식 백업은 저장소 밖의 안전한 위치에 보관하고,
-복원 스크립트는 개인 컴퓨터에서만 실행하세요.
-
-GOPS를 로컬에서 실행하는 방법은 두 가지입니다.
-
-| 목적 | 필요한 것 |
+| 항목 | 현재 상태 |
 | --- | --- |
-| 애플리케이션 코드와 UI 열기 | Docker Desktop과 로컬 `.env`만 필요합니다. AWS 계정은 필요하지 않습니다. |
-| 보존된 시장 데이터 시뮬레이션 재생 | Docker Desktop과 비공개 이동식 백업이 필요합니다. 재생 데이터가 크므로 Docker 디스크 여유 공간을 최소 25GB 확보하세요. |
+| 기존 웹사이트 | 운영 기한 만료로 이용 불가 |
+| Alpaca·KIS·OpenAI 등 외부 연동 | 기존 이용 환경으로 정상 실행 불가. 재구성 시 별도 계정·권한·유효한 자격 증명 필요 |
+| AWS 배포 환경 | 현재 사용 가능한 환경으로 제공하지 않음. 인프라 파일은 설계·구현 참고용 |
+| 로컬 Docker Compose | 구성 파일 보존. 컨테이너 기동만으로 과거 데이터·외부 연동까지 복구되지는 않음 |
+| 과거 데이터 재생 | 비공개 이동식 백업이 필요하며, 해당 데이터는 이 공개 저장소에 포함하지 않음 |
+| 테스트·빌드 | 코드와 검사 명령 보존. 이번 공개 복사 과정에서는 서비스 실행·외부 API 호출·AWS 배포를 수행하지 않음 |
 
-아래 명령은 이 저장소를 `backup` 브랜치로 체크아웃한 상태를 기준으로 합니다.
-
-### 1. 로컬 환경 준비
-
-`.env.example`을 복사해 `.env`를 만듭니다.
-
-```sh
-cp .env.example .env
-```
-
-외부 서비스와 분리된 로컬 실행을 위해, Git에 포함되지 않는 `.env`를 수정하고 실제
-서비스 자격 증명은 비워 둡니다. 아래 값은 브라우저가 로컬 Docker 시뮬레이터를 사용하게
-하고, Google 로그인 없이 시뮬레이터를 제어하게 하며, AWS·Alpaca·KIS·OpenAI 호출을
-막습니다.
-
-```text
-AUTH_ENABLED=false
-SIMULATOR_LOCAL_CONTROL_ENABLED=true
-SIM_AUTH_MODE=off
-GOPS_SIMULATOR_URL=http://gops-simulator:8765
-
-AWS_EC2_METADATA_DISABLED=true
-AWS_ACCESS_KEY_ID=
-AWS_SECRET_ACCESS_KEY=
-AWS_SESSION_TOKEN=
-ALPACA_CREDENTIAL_SOURCE=local-env
-ALPACA_SECRET_NAME=
-APCA_API_KEY_ID=
-APCA_API_SECRET_KEY=
-KIS_ENV=demo
-KIS_CREDENTIAL_SOURCE=local-env
-KIS_DEMO_APP_KEY=
-KIS_DEMO_APP_SECRET=
-KIS_DEMO_ACCOUNT_NO=
-OPENAI_API_KEY=
-AGENT_FINAL_ANSWER_PROVIDER=disabled
-AGENT_FINANCIAL_FINAL_ANSWER_PROVIDER=disabled
-CHART_COMMENTARY_PROVIDER=disabled
-
-DOCKER_S3_ENDPOINT_URL=http://minio:9000
-S3_ACCESS_KEY_ID=minioadmin
-S3_SECRET_ACCESS_KEY=minioadmin
-S3_BUCKET=gops-local
-POSTGRES_PASSWORD=gops_dev_password
-```
-
-`AUTH_ENABLED=false` 설정은 개인 컴퓨터에서만 사용해야 합니다. 포트를 공유 네트워크에
-노출하거나 이 로컬 전용 값을 AWS에 배포하지 마세요.
-
-### 2. 새 로컬 스택 실행
-
-이 명령은 프론트엔드, API, 데이터베이스 컨테이너, 로컬 MinIO 객체 저장소, 재생
-시뮬레이터 컨테이너를 실행합니다. AWS에서 데이터를 내려받지 않습니다.
-
-```sh
-docker compose --env-file .env --profile local-s3 --profile simulator up -d --build
-```
-
-프론트엔드는 http://localhost:5173 에서 엽니다. 주요 로컬 주소는 다음과 같습니다.
-
-```text
-프론트엔드:     http://localhost:5173
-백엔드:         http://localhost:8000/health
-에이전트 API:   http://localhost:8100/health
-시뮬레이터:     http://localhost:8765/health
-```
-
-비공개 데이터 백업이 없더라도 애플리케이션은 실행되지만, 과거 시장 캔들과 재생
-시뮬레이션 데이터는 비어 있습니다. 이 프로젝트는 부족한 데이터를 채우기 위해 가짜
-시장 데이터를 만들지 않습니다.
-
-### 3. 비공개 재생 백업 복원 (선택)
-
-이 프로젝트를 위해 만든 비공개 이동식 백업이 있을 때만 사용하세요. 백업 ZIP은 약
-10GB이며 공개 브랜치에는 포함되지 않습니다. 스크립트는 시뮬레이션에 필요한 로컬
-ClickHouse 테이블 네 개만 복원합니다. 재생 데이터셋 메타데이터, 재생 이벤트, 재생
-캔들, 그리고 전일 종가 기준값으로 쓰이는 정규 차트 캔들이 대상입니다. 변경 전에
-ZIP의 SHA-256을 검증합니다.
-
-먼저 ClickHouse만 실행한 뒤, 스크립트에 비공개 백업 루트 경로를 전달합니다.
-
-```sh
-docker compose --env-file .env --profile local-s3 up -d clickhouse
-GOPS_PORTABLE_BACKUP_ROOT="/absolute/path/to/aws-portable-backup/20260727T030132Z" \
-  scripts/local/restore-simulator-backup.sh --execute
-```
-
-복원은 위 네 개의 **로컬** ClickHouse 테이블을 교체합니다. 전체 앱이 이미 실행 중이면,
-테이블 교체 중 읽기가 발생하지 않도록 API와 시뮬레이션 매처를 먼저 중지하세요.
-
-```sh
-docker compose --env-file .env --profile local-s3 --profile simulator \
-  stop gops-backend simulation-paper-matcher
-```
-
-복원이 성공하면 전체 로컬 스택을 실행하거나 새로고침합니다.
-
-```sh
-docker compose --env-file .env --profile local-s3 --profile simulator up -d --build
-```
-
-### 4. 로그인 없이 시뮬레이션 실행
-
-위 로컬 전용 `.env` 값을 사용하면 Google 계정이나 시뮬레이터 운영자 계정이 필요하지
-않습니다. 프론트엔드 헤더의 SIM 제어 영역에서 재생을 시작·일시정지·재개·재시작하거나
-속도를 바꿀 수 있습니다.
-
-API를 직접 확인할 수도 있습니다. 상태 응답에는 `"available": true`와
-`"canControl": true`가 포함되어야 합니다.
-
-```sh
-curl -fsS http://localhost:8000/api/simulator/status
-curl -fsS -X POST http://localhost:8000/api/simulator/action \
-  -H 'Content-Type: application/json' \
-  -d '{"action":"start"}'
-```
-
-재생은 항상 보존된 데이터셋의 시간 흐름을 사용합니다. SIM 중 생성한 모의 주문은
-로컬 PostgreSQL 컨테이너에만 저장되며, KIS를 호출하거나 실제 주문을 내지 않습니다.
-
-### 5. 로컬 서비스 중지 또는 초기화
-
-로컬 데이터 볼륨을 유지한 채 컨테이너만 중지합니다.
-
-```sh
-docker compose --env-file .env --profile local-s3 --profile simulator stop
-```
-
-볼륨을 유지한 채 컨테이너와 네트워크를 제거합니다.
-
-```sh
-docker compose --env-file .env --profile local-s3 --profile simulator down
-```
-
-다시 시작하려면 2단계 명령을 다시 실행하세요. 모든 로컬 데이터베이스를 삭제하고
-비공개 재생 백업을 다시 복원하려는 경우가 아니라면 `down --volumes`를 실행하지 마세요.
-
-### 6. 로컬 문제 해결
-
-| 증상 | 확인할 내용 |
-| --- | --- |
-| `gops-simulator`를 사용할 수 없음 | `docker compose ... ps`에서 `clickhouse`와 `gops-simulator`가 모두 healthy인지 확인합니다. 이어서 `docker compose ... logs --tail=120 gops-simulator`를 확인하세요. |
-| 재생 데이터셋이 준비되지 않았다는 메시지 | 3단계의 비공개 백업 복원을 실행한 뒤, `docker compose --env-file .env --profile local-s3 --profile simulator up -d --force-recreate gops-simulator`로 시뮬레이터를 다시 만드세요. |
-| 복원에서 백업을 거부함 | `GOPS_PORTABLE_BACKUP_ROOT`가 `data/clickhouse/gops-market-data-20260727T030132Z.zip`과 `SHA256SUMS.txt`를 포함한 경로를 가리키는지 확인합니다. 체크섬 실패를 우회하지 마세요. |
-| Docker 디스크 공간 부족 | Docker 디스크 공간을 비운 뒤 다시 시도하세요. ClickHouse 아카이브와 복원된 테이블에는 상당한 로컬 저장 공간이 필요합니다. |
-| 포트가 이미 사용 중 | `5173`, `8000`, `8100`, `8123`, `8765`, `9000`, `9092`, `6379`, `5433` 중 충돌한 포트를 사용하는 프로세스나 Docker 컨테이너를 중지하세요. |
-
-### 개발용 Python 환경
-
-저장소 루트에 공식 로컬 Python 가상환경 하나만 사용합니다.
-
-```sh
-python -m venv .venv
-. .venv/bin/activate
-python -m pip install --upgrade pip
-python -m pip install -r requirements-dev.txt
-python --version
-```
-
-로컬 Python 버전은 `3.12.x`를 사용합니다. `/tmp`나 임시 경로에 중복 프로젝트 가상환경을 만들지 마세요.
-
-### AWS 연결 로컬 실행 (고급)
-
-이 설정은 위의 분리된 로컬 실행 방식과 다른 대안입니다. 실제 AWS S3와 자격 증명을
-사용할 수 있으므로, 로컬 전용 백업 시뮬레이터 설정과 섞지 말고 자격 증명을 `.env`에
-노출하지 마세요.
-
-AWS를 연결한 로컬 작업에서는 `S3_ENDPOINT_URL`과 `DOCKER_S3_ENDPOINT_URL`을 비워 두고 아래 값을 사용합니다.
-
-```text
-ALPACA_SECRET_NAME=dev/alpaca
-S3_BUCKET=gops-market-data-993099901407-ap-northeast-2-an
-AWS_REGION=ap-northeast-2
-AWS_ACCESS_KEY_ID=<필요한 경우 제한된 로컬 키>
-AWS_SECRET_ACCESS_KEY=<필요한 경우 제한된 로컬 비밀키>
-AWS_SESSION_TOKEN=
-```
-
-이 AWS 연결 로컬 스택을 실행합니다.
-
-```sh
-docker compose --env-file .env up -d --build
-```
-
-접속 주소:
-
-```text
-프론트엔드: http://localhost:5173
-백엔드:     http://localhost:8000/health
-에이전트:   http://localhost:8100/health
-종목 목록:  http://localhost:8000/api/charts/symbols
-캔들:       http://localhost:8000/api/charts/candles?symbol=AAPL&interval=1m&limit=160
-```
-
-실시간 Alpaca 수집은 필요할 때만 실행합니다.
-
-```sh
-docker compose --profile alpaca up -d --build alpaca-ingestor
-```
-
-실시간 수집기는 profile로 분리되어 있으므로, 일반 UI·백엔드 작업에서 Alpaca WebSocket 세션을 자동으로 열지 않습니다.
+코드 검토는 [기술 스택](#기술-스택), [AWS 아키텍처](#aws-아키텍처),
+[저장소 구조](#저장소-구조), [런타임 흐름](#런타임-흐름) 순으로 살펴볼 수 있습니다.
+과거의 상세 실행·백업 복원 절차는 [로컬 실행 참고 자료](docs/LOCAL_RUNTIME_REFERENCE.md)에
+보관했습니다. 외부 서비스 재가입·재결제·재배포는 이 공개 복사 작업에 포함하지 않습니다.
 
 ## API 계약
 
