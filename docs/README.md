@@ -31,6 +31,7 @@ flowchart TD
 
 | File | Purpose |
 | --- | --- |
+| `REPOSITORY_REFERENCE.md` | Repository structure, API contracts, operational rules, and validation commands. |
 | `PRODUCT_CONTEXT.md` | Product direction and current/future scope boundary. |
 | `CHART_DATA_ARCHITECTURE.md` | Current chart fact ownership, compute placement, query path, API/WS, order-flow, and S3 contracts. |
 | `CHART_AGENT_STRATEGY.md` | 차트 지능의 투자적 역할, deterministic kernel, rule/LLM 경계, 작도 compiler, 데이터 사전 계산, orchestrator 통합, 단계별 구현 전략. |
