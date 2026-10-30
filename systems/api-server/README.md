@@ -1,18 +1,18 @@
-# API Server System
+# API 서버 시스템
 
-Owns the single FastAPI server that brokers chart API, order API, orderable cash lookup, and WebSocket traffic.
+차트·주문 API, 주문 가능 금액 조회, WebSocket 통신을 중계하는 FastAPI 서버입니다. FastAPI는 Python으로 HTTP API를 만드는 프레임워크로, 이 프로젝트에서는 브라우저와 내부 데이터·주문 시스템 사이의 진입점을 담당합니다.
 
-## Folders
+## 폴더 구성
 
 ```text
-pods/api-server/gops-backend/   FastAPI application
-tests/                          API server tests
-.env.example                    optional backend-local env example
+pods/api-server/gops-backend/   FastAPI 애플리케이션
+tests/                        API 서버 테스트
+.env.example                   백엔드 단독 실행용 환경 변수 예시
 ```
 
-`jobs/` and `shared/` are reserved for future API-server-owned code. Do not add code there unless this system truly owns it.
+`jobs/`와 `shared/`는 향후 API 서버가 직접 소유할 코드를 위한 예약 경로입니다. 이 시스템의 책임에 해당할 때만 코드를 추가합니다.
 
-## Runtime
+## 실행 구성
 
 ```text
 image:   gops-api-server
@@ -20,9 +20,7 @@ docker:  infra/docker/Dockerfile.gops-backend
 command: uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 
-For a backend-only local process, start from the repository root and pass the
-ignored local file explicitly so every chart module receives the same process
-environment:
+백엔드만 로컬 프로세스로 실행할 때는 저장소 루트에서 아래 명령을 사용합니다. Git에서 제외된 로컬 환경 파일을 명시해 모든 차트 모듈이 같은 환경 변수를 받게 합니다. Uvicorn은 FastAPI 앱을 실행하는 서버이며, 아래 명령에서 앱 위치·수신 주소·포트·환경 파일을 지정합니다.
 
 ```bash
 PYTHONPATH=systems/market-data/shared:systems/order/shared:systems/order:systems/api-server/pods/api-server/gops-backend \
@@ -30,78 +28,41 @@ PYTHONPATH=systems/market-data/shared:systems/order/shared:systems/order:systems
   --env-file systems/api-server/.env
 ```
 
-`systems/api-server/.env.example` is the committed contract. Docker Compose
-uses the repository-root `.env.example` contract instead; real `.env` files
-remain untracked.
+`systems/api-server/.env.example`은 저장소에 보존된 환경 변수 기준입니다. Docker Compose는 루트 `.env.example`을 기준으로 하며, 실제 `.env`는 Git에 포함하지 않습니다.
 
-## Auth
+## 로그인과 인증
 
-Google OAuth login is owned by this API server. When `AUTH_ENABLED=true`, the
-server protects `/api/orders`, `/ws/orders/{order_id}`, and `/api/llm/*`.
-Chart and market-data endpoints remain public.
+Google OAuth 로그인은 API 서버가 담당합니다. OAuth는 사용자의 비밀번호를 직접 받지 않고 외부 로그인 서비스로 신원을 확인하는 방식입니다. `AUTH_ENABLED=true`이면 `/api/orders`, `/ws/orders/{order_id}`, `/api/llm/*`를 보호합니다. 차트·시장 데이터 API는 공개 상태를 유지합니다.
 
-Sessions are stored in Redis under `AUTH_REDIS_KEY_PREFIX` and the browser only
-receives an HttpOnly session id cookie.
+세션은 Redis의 `AUTH_REDIS_KEY_PREFIX` 아래 저장합니다. 브라우저에는 JavaScript에서 읽을 수 없는 HttpOnly 쿠키로 세션 식별자만 전달합니다.
 
-The backend reads `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`, and
-`AUTH_SESSION_SECRET` from direct env first. If `AUTH_ENABLED=true` and any of
-them are empty, `GOOGLE_OAUTH_SECRET_NAME` can point to an AWS Secrets Manager
-JSON secret that supplies the missing values.
+백엔드는 먼저 환경 변수 `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`, `AUTH_SESSION_SECRET`을 읽습니다. 인증이 활성화됐는데 값이 비어 있으면 `GOOGLE_OAUTH_SECRET_NAME`에 지정한 AWS Secrets Manager의 JSON 비밀값에서 누락된 항목을 읽을 수 있습니다.
 
-## Chart Events
+## 차트의 뉴스·실적 이벤트
 
-`GET /api/charts/events` returns stored earnings and daily-news markers for the
-loaded candle range. The handler reads ClickHouse only: S&P 500 earnings come
-from `yahoo_earnings_estimates`, and news comes from
-`news_company_daily_summaries`. Non-S&P 500 symbols return news with an empty
-earnings state instead of an error. Yahoo and Alpaca are never called by this
-request.
+`GET /api/charts/events`는 로드된 캔들 범위의 저장된 실적·일별 뉴스 마커를 반환합니다. 요청 중에는 ClickHouse만 읽습니다. S&P 500 실적은 `yahoo_earnings_estimates`, 뉴스는 `news_company_daily_summaries`에서 조회합니다. S&P 500 밖의 종목은 실적 상태를 빈 값으로 두고 뉴스를 반환합니다. 이 요청은 Yahoo·Alpaca를 호출하지 않습니다.
 
-During tick replay the handlers receive the simulator `virtualTime`. Chart-event
-and daily-news snapshots are limited to `generated_at <= virtualTime` before
-ClickHouse chooses the latest row for each date. `GET /api/market/news/latest`
-uses only ClickHouse localized articles with both `published_at` and
-`localized_at` at or before the cursor; it never reads or warms the live Redis
-cache in SIM. `GET /api/market/news/daily` is also ClickHouse-only in SIM and
-does not attach a latest daily price change. Earnings collected after the replay
-cursor are excluded. Other latest-only market and news-watchlist routes continue
-to return `simulation_data_unavailable`.
+틱 재생에서는 시뮬레이터의 가상시각인 `virtualTime`을 받습니다. 날짜별 최신 행을 고르기 전에 `generated_at <= virtualTime`을 적용하고, 커서 이후에 수집한 실적은 제외합니다.
 
-## Simulator Quick Orders
+SIM의 `GET /api/market/news/latest`는 `published_at`과 `localized_at`이 모두 커서 이하인 ClickHouse 한국어 기사만 읽습니다. 실시간 Redis 캐시를 읽거나 미리 채우지 않습니다. `GET /api/market/news/daily`도 ClickHouse만 읽으며 최신 일간 등락률을 덧붙이지 않습니다. 최신 상태만 제공하는 나머지 시장·관심종목 뉴스 경로는 계속 `simulation_data_unavailable`을 반환합니다.
 
-`GET /api/simulator/quote?symbol=NVDA` exposes the current replay bid and ask
-only while SIM mode is active. The quick-order UI uses that quote instead of the
-blocked live order-flow routes, then submits through the existing
-`POST /api/orders` contract so fills, balances, and order history stay in the
-current simulator `userId + runId` ledger. Symbols outside the replay manifest
-remain unavailable rather than receiving synthetic quotes.
+## 시뮬레이터 빠른 주문
 
-## Market Heatmap
+SIM 모드의 `GET /api/simulator/quote?symbol=NVDA`는 현재 재생 중인 매수·매도 호가를 제공합니다. 빠른 주문 화면은 차단된 실시간 주문흐름 경로 대신 이 호가를 사용하고, 기존 `POST /api/orders`로 주문을 제출합니다. 체결·잔고·주문 이력은 현재 시뮬레이터의 `userId + runId` 원장에 남습니다. 재생 목록 밖의 종목에는 합성 호가를 만들지 않습니다.
 
-`GET /api/market/heatmap?universe=sp500` is the API-owned serving projection for
-the frontend TreeMap. It reads the fundamentals store produced by
-`systems/fundamentals`: Redis summary key
-`gops:fundamentals:summary:v1:{SYMBOL}` first, then ClickHouse
-`sec_financial_facts` and `sec_company_tickers` fallback. It combines
-`sharesOutstanding` with market prices from the market-data provider and caches
-the result in Redis. It does not collect SEC filings directly; that remains a
-separate worker/store responsibility.
+## 증시지도 조회
 
-The public response is intentionally compact for the browser: each item contains
-symbol identity, company/sector/industry labels, `marketCap`, `layoutMarketCap`,
-current quote fields (`lastPrice`, `previousClose`, `changePercent`), and the
-volume fields used by the TreeMap hover panel. The Redis projection may retain
-additional fundamentals for internal consumers, but those fields are not sent
-through this endpoint. Detailed fundamentals and time series are fetched through
-the symbol-specific fundamentals endpoints when a company is selected.
+`GET /api/market/heatmap?universe=sp500`는 브라우저 TreeMap에 필요한 조회 전용 데이터를 제공합니다. TreeMap은 값의 크기에 따라 사각형 면적을 나누는 시각화입니다.
 
-## Imports
+`systems/fundamentals`가 만든 Redis 요약 키 `gops:fundamentals:summary:v1:{SYMBOL}`을 먼저 읽고, 없으면 ClickHouse의 `sec_financial_facts`, `sec_company_tickers`를 조회합니다. 발행 주식 수인 `sharesOutstanding`과 시장 데이터 가격을 조합해 Redis에 캐시합니다. SEC 공시 수집은 별도 작업자·저장소의 책임입니다.
 
-The backend imports shared packages by namespace:
+공개 응답은 종목 식별 정보, 기업·섹터·산업명, `marketCap`, `layoutMarketCap`, 현재가 관련 필드인 `lastPrice`, `previousClose`, `changePercent`, 호버 화면의 거래량 필드로 제한합니다. Redis 내부 데이터에 추가 재무 정보가 있어도 이 API로 보내지 않습니다. 상세 재무·시계열은 기업 선택 시 종목별 API로 조회합니다.
+
+## 공용 패키지 가져오기
 
 ```text
-alfaka.*      from systems/market-data/shared
-kis_trader.*  from systems/order/shared
+alfaka.*      → systems/market-data/shared
+kis_trader.*  → systems/order/shared
 ```
 
-Do not move route behavior or API contracts during structure-only work.
+구조만 정리하는 작업에서는 라우트 동작과 API 규약을 변경하지 않습니다.
